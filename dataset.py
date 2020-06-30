@@ -12,14 +12,15 @@ import torchvision
 from torch.utils.data.sampler import BatchSampler
 
 
-
 class SiameseFaceDataset(datasets.ImageFolder):
     def __init__(self, dir, transform=None, train=True, *args, **kw):
         super(SiameseFaceDataset, self).__init__(dir, transform)
         self.train = train
         self.img_path = []
+        print('添加图像路径...')
         for path, _ in self.imgs:
             self.img_path.append(path)
+        print('图像路径添加结束!')
         self.labels_set = set(self.targets)
         self.label_to_indices = {label: np.where(np.array(self.targets) == label)[0] for label in self.labels_set}
 
@@ -69,8 +70,10 @@ class TripletFaceDataset(datasets.ImageFolder):
         # labels即self.targets
         self.train = train
         self.img_path = []
+        print('添加图像路径...')
         for path, _ in self.imgs:
             self.img_path.append(path)
+        print('图像路径添加结束!')
         self.labels_set = set(self.targets)
         self.label_to_indices = {label: np.where(np.array(self.targets) == label)[0] for label in self.labels_set}
 

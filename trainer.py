@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+from tqdm import tqdm
+
 
 
 def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, metrics=[],
@@ -20,7 +22,7 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         scheduler.step()
 
         # Train stage
-        train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics)
+        train_loss, metrics = train_epoch(train_loader, model, epoch, n_epochs, loss_fn, optimizer, cuda, log_interval, metrics)
 
         message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
         for metric in metrics:
@@ -37,7 +39,7 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         print(message)
 
 
-def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics):
+def train_epoch(train_loader, model, epoch, n_epochs, loss_fn, optimizer, cuda, log_interval, metrics):
     for metric in metrics:
         metric.reset()
 
@@ -45,7 +47,8 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
     losses = []
     total_loss = 0
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+    pbar =tqdm(enumerate(train_loader))
+    for batch_idx, (data, target) in pbar:
         # len(target) == 0 是TripletMNIST的情况,返回一个空list
         target = target if len(target) > 0 else None
         # SiameseMNIST,TripletMNIST返回list,BalancedBatchSampler返回torch.Tensor
@@ -80,13 +83,26 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
             metric(outputs, target, loss_outputs)
 
         if batch_idx % log_interval == 0:
-            message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                batch_idx * len(data[0]), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), np.mean(losses))
-            for metric in metrics:
-                message += '\t{}: {}'.format(metric.name(), metric.value())
 
-            print(message)
+
+            # message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            #     batch_idx * len(data[0]), len(train_loader.dataset),
+            #     100. * batch_idx / len(train_loader), np.mean(losses))
+            # for metric in metrics:
+            #     message += '\t{}: {}'.format(metric.name(), metric.value())
+            #
+            # print(message)
+
+            print_message = 'Train Epoch: {}/{} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t{}: {}'.format(
+                epoch + 1, n_epochs, batch_idx * len(data[0]), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), np.mean(losses),
+                metric.name(), metric.value()
+            )
+            for metric in metrics:
+                print_message += '\t{}: {}'.format(metric.name(), metric.value())
+
+            pbar.set_description(print_message)
+
             losses = []
 
     total_loss /= (batch_idx + 1)
@@ -99,6 +115,7 @@ def test_epoch(val_loader, model, loss_fn, cuda, metrics):
             metric.reset()
         model.eval()
         val_loss = 0
+
         for batch_idx, (data, target) in enumerate(val_loader):
             target = target if len(target) > 0 else None
             if not type(data) in (tuple, list):
