@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import torch
-from PIL import Image
+
 import torchvision.datasets as datasets
 import os
 import numpy as np
