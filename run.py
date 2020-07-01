@@ -13,7 +13,13 @@ from networks import EmbeddingNet, SiameseNet
 from losses import ContrastiveLoss
 from utils import Scale
 from logger import Logger
-
+import torchvision
+from torchvision import datasets
+from dataset import SiameseFaceDataset, TripletFaceDataset, BalancedBatchSampler
+from networks import EmbeddingNet
+from losses import OnlineTripletLoss
+from utils import AllTripletSelector,HardestNegativeTripletSelector, RandomNegativeTripletSelector, SemihardNegativeTripletSelector # Strategies for selecting triplets within a minibatch
+from metrics import AverageNonzeroTripletsMetric
 
 transform = transforms.Compose([
                 Scale(96),
@@ -29,27 +35,37 @@ batch_size = 8
 embedding_size = 16
 margin = 1.
 embedding_net = EmbeddingNet(embedding_size=embedding_size)
-model = SiameseNet(embedding_net)
+model = embedding_net
 if cuda:
     model.cuda()
-loss_fn = ContrastiveLoss(margin)
+loss_fn = OnlineTripletLoss(margin, RandomNegativeTripletSelector(margin))
 lr = 1e-3
-optimizer = optim.Adam(model.parameters(), lr=lr)
+optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
 scheduler = lr_scheduler.StepLR(optimizer, 8, gamma=0.1, last_epoch=-1)
-n_epochs = 10
-log_interval = 100
+n_epochs = 5
+log_interval = 25
 log_dir = './log'
 optimizer_name = 'Adam'
 LOG_DIR =log_dir + '/run-optim{}-lr{}-embbeding_size{}'.format(optimizer_name, lr, embedding_size)
 logger = Logger(LOG_DIR)
 
 
-train_dataset = SiameseFaceDataset(dir=train_path, transform=transform)
-train_dataset = SiameseFaceDataset(dir=test_path, transform=transform, train=False)
 
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **kwargs)
-test_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False, **kwargs)
+train_dataset = datasets.ImageFolder(train_path, transform = transform)
+test_dataset = datasets.ImageFolder(test_path, transform=transform)
+
+
+# We'll create mini batches by sampling labels that will be present in the mini batch and number of examples from each class
+train_batch_sampler = BalancedBatchSampler(train_dataset.targets, n_classes=4, n_samples=2)
+test_batch_sampler = BalancedBatchSampler(test_dataset.targets, n_classes=4, n_samples=2)
+
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_sampler=train_batch_sampler, **kwargs)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_sampler=test_batch_sampler, **kwargs)
+
+print(len(train_loader))
+print(len(test_loader))
+
 
 
 fit(train_loader, test_loader, model, logger, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval)
